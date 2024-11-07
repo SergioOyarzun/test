@@ -1,5 +1,5 @@
 ---
-- name: Recopilar información de CPU, RAM y Disco Duro
+- name: Recopilar y guardar información de CPU, RAM y Disco Duro en JSON
   hosts: all
   gather_facts: yes
   tasks:
@@ -7,22 +7,29 @@
       ansible.builtin.command: lscpu
       register: cpu_info
 
-    - name: Mostrar información de la CPU
-      ansible.builtin.debug:
-        var: cpu_info.stdout_lines
-
     - name: Obtener información de la RAM
       ansible.builtin.command: free -h
       register: ram_info
-
-    - name: Mostrar información de la RAM
-      ansible.builtin.debug:
-        var: ram_info.stdout_lines
 
     - name: Obtener información del disco duro
       ansible.builtin.command: df -h
       register: disk_info
 
-    - name: Mostrar información del disco duro
-      ansible.builtin.debug:
-        var: disk_info.stdout_lines
+    - name: Crear archivo JSON con información del sistema
+      ansible.builtin.copy:
+        content: |
+          {
+            "hostname": "{{ inventory_hostname }}",
+            "cpu_info": "{{ cpu_info.stdout_lines | to_json }}",
+            "ram_info": "{{ ram_info.stdout_lines | to_json }}",
+            "disk_info": "{{ disk_info.stdout_lines | to_json }}"
+          }
+        dest: "/tmp/sistema_info_{{ inventory_hostname }}.json"
+        mode: '0644'
+
+    - name: Descargar archivo JSON al controlador local (opcional)
+      ansible.builtin.fetch:
+        src: "/tmp/sistema_info_{{ inventory_hostname }}.json"
+        dest: "./sistema_info_{{ inventory_hostname }}.json"
+        flat: yes
+
