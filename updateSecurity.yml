@@ -14,11 +14,11 @@
         allow_unauthenticated: no
 
     - name: Comprobar si es necesario reiniciar el sistema
-      ansible.builtin.command: /usr/bin/needs-restarting
+      ansible.builtin.stat:
+        path: /var/run/reboot-required
       register: reboot_needed
-      ignore_errors: yes
-      changed_when: reboot_needed.rc == 1
 
     - name: Reiniciar el servidor si es necesario
       ansible.builtin.reboot:
-      when: reboot_needed.rc == 1
+      when: reboot_needed.stat.exists
+
