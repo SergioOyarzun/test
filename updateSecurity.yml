@@ -1,6 +1,6 @@
 ---
 - name: Actualizar parches de seguridad en servidores Ubuntu
-  hosts: ubuntu_servers
+  hosts: all
   become: yes
   tasks:
     - name: Actualizar la lista de paquetes
