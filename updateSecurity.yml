@@ -1,6 +1,6 @@
 ---
 - name: Actualizar parches de seguridad en servidores Ubuntu y guardar resultados
-  hosts: all
+  hosts: ubuntu_servers
   become: yes
   tasks:
     - name: Actualizar la lista de paquetes
@@ -20,8 +20,9 @@
         content: |
           Resultados de la actualización de seguridad para {{ inventory_hostname }}:
           Fecha: {{ ansible_date_time.date }} Hora: {{ ansible_date_time.time }}
-          Paquetes actualizados:
-          {{ upgrade_result.changes.packages | to_nice_json }}
+          
+          Resultado de la actualización:
+          {{ upgrade_result | to_nice_json }}
         mode: '0644'
 
     - name: Comprobar si es necesario reiniciar el sistema
@@ -32,4 +33,3 @@
     - name: Reiniciar el servidor si es necesario
       ansible.builtin.reboot:
       when: reboot_needed.stat.exists
-
