@@ -1,0 +1,27 @@
+---
+- name: Instalar solo parches de seguridad en servidores Ubuntu
+  hosts: all
+  become: yes
+  tasks:
+    - name: Asegurarse de que unattended-upgrades esté instalado
+      ansible.builtin.apt:
+        name: unattended-upgrades
+        state: present
+
+    - name: Configurar unattended-upgrades para aplicar solo actualizaciones de seguridad
+      ansible.builtin.copy:
+        dest: /etc/apt/apt.conf.d/50unattended-upgrades
+        content: |
+          Unattended-Upgrade::Allowed-Origins {
+            "${distro_id}:${distro_codename}-security";
+          };
+          Unattended-Upgrade::Automatic-Reboot "false";
+        mode: '0644'
+
+    - name: Ejecutar unattended-upgrades para aplicar parches de seguridad
+      ansible.builtin.command: unattended-upgrade -d
+      register: upgrade_output
+
+    - name: Mostrar resultado de las actualizaciones de seguridad
+      ansible.builtin.debug:
+        var: upgrade_output.stdout_lines

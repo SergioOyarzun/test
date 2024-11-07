@@ -1,6 +1,6 @@
 ---
-- name: Actualizar parches de seguridad en servidores Ubuntu
-  hosts: all
+- name: Actualizar parches de seguridad en servidores Ubuntu y guardar resultados
+  hosts: ubuntu_servers
   become: yes
   tasks:
     - name: Actualizar la lista de paquetes
@@ -12,6 +12,17 @@
       ansible.builtin.apt:
         upgrade: dist
         allow_unauthenticated: no
+      register: upgrade_result
+
+    - name: Guardar el resultado de las actualizaciones en un archivo
+      ansible.builtin.copy:
+        dest: "/tmp/actualizacion_seguridad_{{ inventory_hostname }}.txt"
+        content: |
+          Resultados de la actualización de seguridad para {{ inventory_hostname }}:
+          Fecha: {{ ansible_date_time.date }} Hora: {{ ansible_date_time.time }}
+          Paquetes actualizados:
+          {{ upgrade_result.changes.packages | to_nice_json }}
+        mode: '0644'
 
     - name: Comprobar si es necesario reiniciar el sistema
       ansible.builtin.stat:
