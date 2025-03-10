@@ -22,7 +22,7 @@
 
     - name: Ejecutar Configure si la carpeta existe
       command:
-        cmd: "./Configure -des -Dprefix={{ ansible_env.HOME }}/localperl"
+        cmd: "{{ ansible_env.HOME }}./Configure -des -Dprefix={{ ansible_env.HOME }}/localperl"
         chdir: "{{ ansible_env.HOME }}/perl-5.30.0"
       when: perl_dir.stat.exists
       register: configure_output
