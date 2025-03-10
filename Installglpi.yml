@@ -88,9 +88,6 @@
       register: glpi_install
       when: configure_output.rc is defined and configure_output.rc == 0
 
-    - name: Mostrar resultado de la instalación de GLPI Agent si existe
-      debug:
-        msg: "Resultado de la instalación de GLPI Agent: {{ glpi_install.stdout | default('No output') }}"
 ---
 - name: Instalar y configurar Perl en $HOME/localperl
   hosts: all
