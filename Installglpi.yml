@@ -15,20 +15,33 @@
         dest: "{{ ansible_env.HOME }}/"
         remote_src: yes
 
-    - name: Ejecutar Configure
+    - name: Verificar si la carpeta de Perl existe
+      stat:
+        path: "{{ ansible_env.HOME }}/perl-5.30.0"
+      register: perl_dir
+
+    - name: Ejecutar Configure si la carpeta existe
       command:
         cmd: "./Configure -des -Dprefix={{ ansible_env.HOME }}/localperl"
         chdir: "{{ ansible_env.HOME }}/perl-5.30.0"
+      when: perl_dir.stat.exists
+      register: configure_output
+      ignore_errors: yes
+
+    - debug:
+        msg: "Salida de ./Configure: {{ configure_output.stdout }}"
 
     - name: Compilar Perl
       command:
         cmd: "make -j$(nproc)"
         chdir: "{{ ansible_env.HOME }}/perl-5.30.0"
+      when: configure_output.rc == 0
 
     - name: Instalar Perl en {{ ansible_env.HOME }}/localperl
       command:
         cmd: "make install"
         chdir: "{{ ansible_env.HOME }}/perl-5.30.0"
+      when: configure_output.rc == 0
 
     - name: Agregar Perl al PATH en .bashrc
       lineinfile:
@@ -44,6 +57,7 @@
     - name: Verificar la instalación de Perl
       command: "perl -v"
       register: perl_version
+      when: configure_output.rc == 0
 
     - debug:
         msg: "Perl instalado correctamente: {{ perl_version.stdout }}"
@@ -51,6 +65,7 @@
     - name: Verificar la ruta de Perl
       command: "which perl"
       register: perl_path
+      when: configure_output.rc == 0
 
     - debug:
         msg: "Ruta de Perl: {{ perl_path.stdout }}"
@@ -68,6 +83,7 @@
       command:
         cmd: "{{ ansible_env.HOME }}/localperl/bin/perl {{ ansible_env.HOME }}/glpi-agent-1.12-linux-installer.pl --server=http://172.16.120.105/"
       register: glpi_install
+      when: configure_output.rc == 0
 
     - debug:
         msg: "Resultado de la instalación de GLPI Agent: {{ glpi_install.stdout }}"
