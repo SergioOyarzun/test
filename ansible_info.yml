@@ -5,7 +5,7 @@
   gather_facts: true
 
   vars:
-    salida_dir: "/tmp/ansible_info"
+    salida_dir: "/tmp"
     archivo_csv: "{{ salida_dir }}/{{ inventory_hostname }}.csv"
 
   tasks:
