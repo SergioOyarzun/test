@@ -1,7 +1,7 @@
 ---
 - name: Obtener información del sistema y paquetes
   hosts: all
-  become: true
+  become: false
   gather_facts: true
 
   vars:
