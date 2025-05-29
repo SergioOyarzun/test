@@ -1,0 +1,59 @@
+---
+- name: Recopilar información del sistema y generar CSV
+  hosts: all
+  become: true
+  gather_facts: true
+  vars:
+    ruta_remota: "/tmp/{{ inventory_hostname }}_info.csv"
+
+  tasks:
+
+    - name: Obtener lista de paquetes (Debian)
+      command: dpkg-query -W -f='${Package},${Version}\n'
+      register: paquetes
+      when: ansible_facts['os_family'] == "Debian"
+      changed_when: false
+
+    - name: Obtener lista de paquetes (RedHat)
+      command: rpm -qa --qf '%{NAME},%{VERSION}-%{RELEASE}\n'
+      register: paquetes
+      when: ansible_facts['os_family'] == "RedHat"
+      changed_when: false
+
+    - name: Generar contenido CSV
+      set_fact:
+        contenido_csv: |
+          Hostname,Distribucion,Version,Kernel,Arquitectura
+          {{ ansible_hostname }},{{ ansible_distribution }},{{ ansible_distribution_version }},{{ ansible_kernel }},{{ ansible_architecture }}
+
+          Paquete,Version
+          {{ paquetes.stdout | default('Sin datos de paquetes') }}
+
+    - name: Crear archivo CSV en el host remoto
+      copy:
+        dest: "{{ ruta_remota }}"
+        content: "{{ contenido_csv }}"
+
+    - name: Verificar archivo creado
+      shell: ls -l "{{ ruta_remota }}"
+      register: archivo_info
+      changed_when: false
+
+    - name: Mostrar resultado del archivo
+      debug:
+        var: archivo_info.stdout
+
+    # (Opcional) Descargarlo a máquina controladora
+    - name: Crear carpeta local para los CSVs
+      delegate_to: localhost
+      run_once: true
+      file:
+        path: "./resultados_csv"
+        state: directory
+        mode: "0755"
+
+    - name: Descargar CSV desde host remoto
+      fetch:
+        src: "{{ ruta_remota }}"
+        dest: "./resultados_csv/"
+        flat: true
