@@ -47,6 +47,7 @@
     - name: Crear carpeta local para los CSVs
       delegate_to: localhost
       run_once: true
+      become: false  # 👈 agregado aquí
       file:
         path: "./resultados_csv"
         state: directory
