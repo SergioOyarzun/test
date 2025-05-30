@@ -20,10 +20,9 @@
       when: ansible_facts['os_family'] == "RedHat"
       changed_when: false
 
-      
     - name: Convertir lista de paquetes a texto CSV
       set_fact:
-        paquetes_csv: "{{ paquetes.stdout_lines | join('\n') | default('Sin datos de paquetes') }}"
+        paquetes_csv: "{{ paquetes.stdout_lines | default([]) | join('\n') }}"
 
     - name: Generar contenido CSV
       set_fact:
@@ -32,7 +31,7 @@
           {{ ansible_hostname }},{{ ansible_distribution }},{{ ansible_distribution_version }},{{ ansible_kernel }},{{ ansible_architecture }}
 
           Paquete,Version
-          {{ paquetes_csv }}
+          {{ paquetes_csv | default('Sin datos de paquetes') }}
 
     - name: Crear archivo CSV en el host remoto
       copy:
@@ -48,11 +47,10 @@
       debug:
         var: archivo_info.stdout
 
-    # (Opcional) Descargarlo a máquina controladora
     - name: Crear carpeta local para los CSVs
       delegate_to: localhost
       run_once: true
-      become: false  # 👈 agregado aquí
+      become: false
       file:
         path: "./resultados_csv"
         state: directory
