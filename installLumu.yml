@@ -1,0 +1,30 @@
+---
+- name: Instalar y activar Lumu Linux Agent
+  hosts: all
+  become: yes
+
+  tasks:
+    - name: Instalar yum-utils
+      yum:
+        name: yum-utils
+        state: present
+
+    - name: Agregar repositorio de Lumu
+      get_url:
+        url: https://packages.lumu.io/rhel/lumu.repo
+        dest: /etc/yum.repos.d/lumu.repo
+        mode: '0644'
+
+    - name: Instalar lumu-linux-agent
+      yum:
+        name: lumu-linux-agent
+        state: present
+
+    - name: Activar lumu-agent-support
+      command: lumu-agent-support --activate E7dWZ9x1YR
+      register: activate_output
+      changed_when: "'successfully' in activate_output.stdout.lower()"
+
+    - name: Mostrar salida de activación
+      debug:
+        var: activate_output.stdout
