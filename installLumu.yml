@@ -2,6 +2,7 @@
 - name: Instalar y activar Lumu Linux Agent
   hosts: all
   become: yes
+  become_user: root
 
   tasks:
     - name: Instalar yum-utils
@@ -28,3 +29,4 @@
     - name: Mostrar salida de activación
       debug:
         var: activate_output.stdout
+
