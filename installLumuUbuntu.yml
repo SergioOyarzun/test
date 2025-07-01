@@ -1,14 +1,13 @@
 ---
-- name: Instalar y activar Lumu Linux Agent en Ubuntu
+- name: Instalar Lumu Linux Agent en Ubuntu/Debian
   hosts: all
   become: yes
   become_user: root
 
   tasks:
-    - name: Actualizar lista de paquetes
+    - name: Actualizar caché de paquetes
       apt:
         update_cache: yes
-        cache_valid_time: 3600
 
     - name: Instalar dependencias necesarias
       apt:
@@ -18,25 +17,25 @@
           - gnupg
         state: present
 
-    - name: Crear directorio de claves APT
+    - name: Crear directorio /etc/apt/keyrings si no existe
       file:
         path: /etc/apt/keyrings
         state: directory
         mode: '0755'
 
-    - name: Descargar y guardar la clave pública de Lumu
-      shell: curl -fsSL https://packages.lumu.io/ubuntu/ubuntu.pub.key | gpg --dearmor -o /etc/apt/keyrings/lumu.gpg
+    - name: Descargar y guardar clave GPG de Lumu (evitar duplicados)
+      shell: |
+        wget -q -O - https://packages.lumu.io/ubuntu/ubuntu.pub.key | gpg --dearmor -o /etc/apt/keyrings/lumu.gpg
       args:
         creates: /etc/apt/keyrings/lumu.gpg
 
-    - name: Establecer permisos de lectura para la clave
+    - name: Dar permisos de lectura a la clave
       file:
         path: /etc/apt/keyrings/lumu.gpg
         mode: '0644'
 
-    - name: Obtener información de la distribución
-      ansible.builtin.shell: |
-        . /etc/os-release && echo "$VERSION_CODENAME"
+    - name: Obtener codename del sistema (ej: jammy, focal)
+      shell: . /etc/os-release && echo "$VERSION_CODENAME"
       register: version_codename
       changed_when: false
 
@@ -46,7 +45,7 @@
         content: |
           deb [arch={{ ansible_architecture }} signed-by=/etc/apt/keyrings/lumu.gpg] https://packages.lumu.io/ubuntu/{{ version_codename.stdout }} {{ version_codename.stdout }} stable
 
-    - name: Actualizar lista de paquetes después de agregar repo
+    - name: Actualizar repositorios
       apt:
         update_cache: yes
 
@@ -54,12 +53,3 @@
       apt:
         name: lumu-linux-agent
         state: present
-
-    - name: Activar el agente Lumu
-      command: lumu-agent-support --activate E7dWZ9x1YR
-      register: activate_output
-      changed_when: "'successfully' in activate_output.stdout.lower()"
-
-    - name: Mostrar salida de activación
-      debug:
-        var: activate_output.stdout
