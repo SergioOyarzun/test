@@ -1,8 +1,11 @@
 ---
-- name: Instalar Lumu Linux Agent en Ubuntu/Debian
+- name: Instalar y activar Lumu Linux Agent en Ubuntu/Debian
   hosts: all
   become: yes
   become_user: root
+
+  vars:
+    lumu_activation_key: "E7dWZ9x1YR"
 
   tasks:
     - name: Actualizar caché de paquetes
@@ -23,13 +26,13 @@
         state: directory
         mode: '0755'
 
-    - name: Descargar y guardar clave GPG de Lumu (evitar duplicados)
+    - name: Descargar y guardar clave GPG de Lumu
       shell: |
-        wget -q -O - https://packages.lumu.io/ubuntu/ubuntu.pub.key | gpg --dearmor -o /etc/apt/keyrings/lumu.gpg
+        curl -fsSL https://packages.lumu.io/ubuntu/ubuntu.pub.key | gpg --dearmor -o /etc/apt/keyrings/lumu.gpg
       args:
         creates: /etc/apt/keyrings/lumu.gpg
 
-    - name: Dar permisos de lectura a la clave
+    - name: Establecer permisos de la clave
       file:
         path: /etc/apt/keyrings/lumu.gpg
         mode: '0644'
@@ -39,17 +42,35 @@
       register: version_codename
       changed_when: false
 
-    - name: Agregar repositorio de Lumu
+    - name: Crear archivo de repositorio Lumu
       copy:
         dest: /etc/apt/sources.list.d/lumu.list
         content: |
-          deb [arch={{ ansible_architecture }} signed-by=/etc/apt/keyrings/lumu.gpg] https://packages.lumu.io/ubuntu/{{ version_codename.stdout }} {{ version_codename.stdout }} stable
+          deb [arch=amd64 signed-by=/etc/apt/keyrings/lumu.gpg] https://packages.lumu.io/ubuntu/{{ version_codename.stdout }} {{ version_codename.stdout }} stable
 
-    - name: Actualizar repositorios
+    - name: Actualizar caché de paquetes luego de agregar repo
       apt:
         update_cache: yes
+
+    - name: Verificar disponibilidad del paquete lumu-linux-agent
+      shell: apt-cache policy lumu-linux-agent
+      register: lumu_check
+      changed_when: false
+
+    - name: Mostrar info de paquete lumu-linux-agent
+      debug:
+        var: lumu_check.stdout_lines
 
     - name: Instalar el agente Lumu
       apt:
         name: lumu-linux-agent
         state: present
+
+    - name: Activar el agente Lumu
+      command: lumu-agent-support --activate {{ lumu_activation_key }}
+      register: activate_output
+      changed_when: "'successfully' in activate_output.stdout.lower() or 'already' in activate_output.stdout.lower()"
+
+    - name: Mostrar resultado de activación
+      debug:
+        var: activate_output.stdout
