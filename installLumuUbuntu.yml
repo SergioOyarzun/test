@@ -34,7 +34,7 @@
         path: /etc/apt/keyrings/lumu.gpg
         mode: '0644'
 
-    - name: Obtener codename del sistema (ej: jammy, focal)
+    - name: "Obtener codename del sistema (ej: jammy, focal)"
       shell: . /etc/os-release && echo "$VERSION_CODENAME"
       register: version_codename
       changed_when: false
