@@ -1,0 +1,65 @@
+---
+- name: Instalar y activar Lumu Linux Agent en Ubuntu
+  hosts: all
+  become: yes
+  become_user: root
+
+  tasks:
+    - name: Actualizar lista de paquetes
+      apt:
+        update_cache: yes
+        cache_valid_time: 3600
+
+    - name: Instalar dependencias necesarias
+      apt:
+        name:
+          - ca-certificates
+          - curl
+          - gnupg
+        state: present
+
+    - name: Crear directorio de claves APT
+      file:
+        path: /etc/apt/keyrings
+        state: directory
+        mode: '0755'
+
+    - name: Descargar y guardar la clave pública de Lumu
+      shell: curl -fsSL https://packages.lumu.io/ubuntu/ubuntu.pub.key | gpg --dearmor -o /etc/apt/keyrings/lumu.gpg
+      args:
+        creates: /etc/apt/keyrings/lumu.gpg
+
+    - name: Establecer permisos de lectura para la clave
+      file:
+        path: /etc/apt/keyrings/lumu.gpg
+        mode: '0644'
+
+    - name: Obtener información de la distribución
+      ansible.builtin.shell: |
+        . /etc/os-release && echo "$VERSION_CODENAME"
+      register: version_codename
+      changed_when: false
+
+    - name: Agregar repositorio de Lumu
+      copy:
+        dest: /etc/apt/sources.list.d/lumu.list
+        content: |
+          deb [arch={{ ansible_architecture }} signed-by=/etc/apt/keyrings/lumu.gpg] https://packages.lumu.io/ubuntu/{{ version_codename.stdout }} {{ version_codename.stdout }} stable
+
+    - name: Actualizar lista de paquetes después de agregar repo
+      apt:
+        update_cache: yes
+
+    - name: Instalar el agente Lumu
+      apt:
+        name: lumu-linux-agent
+        state: present
+
+    - name: Activar el agente Lumu
+      command: lumu-agent-support --activate E7dWZ9x1YR
+      register: activate_output
+      changed_when: "'successfully' in activate_output.stdout.lower()"
+
+    - name: Mostrar salida de activación
+      debug:
+        var: activate_output.stdout
