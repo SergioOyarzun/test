@@ -1,0 +1,23 @@
+---
+- name: Actualizar sudo en Ubuntu y Oracle Linux
+  hosts: all
+  become: true
+  tasks:
+    - name: Obtener información del sistema operativo
+      ansible.builtin.setup:
+        gather_subset:
+          - os_family
+          - distribution
+
+    - name: Actualizar paquete sudo en Ubuntu
+      ansible.builtin.apt:
+        name: sudo
+        state: latest
+        update_cache: true
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: Actualizar paquete sudo en Oracle Linux
+      ansible.builtin.yum:
+        name: sudo
+        state: latest
+      when: ansible_facts['os_family'] == "RedHat"
