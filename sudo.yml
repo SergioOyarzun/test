@@ -2,6 +2,7 @@
 - name: Actualizar sudo en Ubuntu y Oracle Linux
   hosts: all
   become: true
+  become_user: root  # Forzar ejecución como root
   tasks:
     - name: Obtener información del sistema operativo
       ansible.builtin.setup:
@@ -20,5 +21,4 @@
       ansible.builtin.yum:
         name: sudo
         state: latest
-      become: true
       when: ansible_facts['os_family'] == "RedHat"
