@@ -1,8 +1,12 @@
 ---
-- name: Forzar actualización de sudo en Ubuntu y Oracle Linux como root
+- name: Compilar e instalar sudo 1.9.17p1 en Ubuntu y Oracle Linux
   hosts: all
   become: true
-  become_user: root  # Ejecutar siempre como root
+  become_user: root
+  vars:
+    sudo_version: "1.9.17p1"
+    sudo_url: "https://www.sudo.ws/dist/sudo-1.9.17p1.tar.gz"
+
   tasks:
 
     - name: Recopilar información del sistema operativo
@@ -11,39 +15,54 @@
           - os_family
           - distribution
 
-    - name: Forzar apt-get update con --allow-releaseinfo-change
-      ansible.builtin.command: apt-get update --allow-releaseinfo-change
-      when: ansible_facts['os_family'] == "Debian"
+    #### Descargar, compilar e instalar sudo ####
+    - name: Crear carpeta temporal para compilación
+      ansible.builtin.file:
+        path: /tmp/sudo_build
+        state: directory
+        mode: '0755'
 
-    - name: Actualizar sudo en Ubuntu
-      ansible.builtin.apt:
-        name: sudo
-        state: latest
-      when: ansible_facts['os_family'] == "Debian"
+    - name: Descargar sudo {{ sudo_version }}
+      ansible.builtin.get_url:
+        url: "{{ sudo_url }}"
+        dest: "/tmp/sudo_build/sudo-{{ sudo_version }}.tar.gz"
 
-    - name: Limpiar metadata de YUM
-      ansible.builtin.command: yum clean all
-      when: ansible_facts['os_family'] == "RedHat"
+    - name: Extraer código fuente de sudo
+      ansible.builtin.unarchive:
+        src: "/tmp/sudo_build/sudo-{{ sudo_version }}.tar.gz"
+        dest: /tmp/sudo_build
+        remote_src: yes
 
-    - name: Actualizar cache de YUM
-      ansible.builtin.yum:
-        name: '*'
-        state: latest
-        update_cache: true
-      when: ansible_facts['os_family'] == "RedHat"
+    - name: Compilar e instalar sudo
+      ansible.builtin.shell: |
+        cd /tmp/sudo_build/sudo-{{ sudo_version }}
+        ./configure --prefix=/usr/local
+        make
+        make install
+      args:
+        executable: /bin/bash
 
-    - name: Asegurar instalación de sudo en Oracle Linux
-      ansible.builtin.yum:
-        name: sudo
-        state: latest
-      when: ansible_facts['os_family'] == "RedHat"
+    #### Respaldar y reemplazar binario de sudo ####
+    - name: Hacer respaldo de sudo actual
+      ansible.builtin.copy:
+        src: /usr/bin/sudo
+        dest: /usr/bin/sudo.bak
+        remote_src: yes
+        backup: yes
 
-    - name: Verificar versión instalada de sudo
+    - name: Reemplazar binario de sudo por el compilado
+      ansible.builtin.copy:
+        src: /usr/local/bin/sudo
+        dest: /usr/bin/sudo
+        remote_src: yes
+        mode: '0755'
+
+    #### Verificación final ####
+    - name: Verificar versión de sudo instalada
       ansible.builtin.command: sudo -V
-      register: sudo_output
+      register: sudo_ver
       changed_when: false
 
-    - name: Mostrar versión de sudo instalada
+    - name: Mostrar versión de sudo
       ansible.builtin.debug:
-        var: sudo_output.stdout_lines
-
+        var: sudo_ver.stdout_lines
