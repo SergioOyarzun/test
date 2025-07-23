@@ -1,24 +1,49 @@
 ---
-- name: Actualizar sudo en Ubuntu y Oracle Linux
+- name: Forzar actualización de sudo en Ubuntu y Oracle Linux como root
   hosts: all
   become: true
-  become_user: root  # Forzar ejecución como root
+  become_user: root  # Ejecutar siempre como root
   tasks:
-    - name: Obtener información del sistema operativo
+
+    - name: Recopilar información del sistema operativo
       ansible.builtin.setup:
         gather_subset:
           - os_family
           - distribution
 
-    - name: Actualizar paquete sudo en Ubuntu
+    - name: Forzar apt-get update con --allow-releaseinfo-change
+      ansible.builtin.command: apt-get update --allow-releaseinfo-change
+      when: ansible_facts['os_family'] == "Debian"
+
+    - name: Actualizar sudo en Ubuntu
       ansible.builtin.apt:
         name: sudo
         state: latest
-        update_cache: true
       when: ansible_facts['os_family'] == "Debian"
 
-    - name: Actualizar paquete sudo en Oracle Linux
+    - name: Limpiar metadata de YUM
+      ansible.builtin.command: yum clean all
+      when: ansible_facts['os_family'] == "RedHat"
+
+    - name: Actualizar cache de YUM
+      ansible.builtin.yum:
+        name: '*'
+        state: latest
+        update_cache: true
+      when: ansible_facts['os_family'] == "RedHat"
+
+    - name: Asegurar instalación de sudo en Oracle Linux
       ansible.builtin.yum:
         name: sudo
         state: latest
       when: ansible_facts['os_family'] == "RedHat"
+
+    - name: Verificar versión instalada de sudo
+      ansible.builtin.command: sudo -V
+      register: sudo_output
+      changed_when: false
+
+    - name: Mostrar versión de sudo instalada
+      ansible.builtin.debug:
+        var: sudo_output.stdout_lines
+
