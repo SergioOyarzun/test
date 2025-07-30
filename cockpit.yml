@@ -1,6 +1,8 @@
 - name: Habilitar e iniciar cockpit en Oracle Linux
   hosts: all
-  become: true
+  become: yes
+  become_user: root
+
 
   tasks:
     - name: Asegurarse de que cockpit.socket esté habilitado e iniciado
