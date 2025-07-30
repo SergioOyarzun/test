@@ -1,0 +1,10 @@
+- name: Habilitar e iniciar cockpit en Oracle Linux
+  hosts: servidores
+  become: true
+
+  tasks:
+    - name: Asegurarse de que cockpit.socket esté habilitado e iniciado
+      ansible.builtin.systemd:
+        name: cockpit.socket
+        enabled: yes
+        state: started
