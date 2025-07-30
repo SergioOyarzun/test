@@ -1,5 +1,5 @@
 - name: Habilitar e iniciar cockpit en Oracle Linux
-  hosts: servidores
+  hosts: all
   become: true
 
   tasks:
