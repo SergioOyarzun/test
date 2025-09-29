@@ -1,0 +1,20 @@
+---
+- name: Obtener versión de Apache
+  hosts: webservers   # <- aquí va tu grupo de hosts en el inventory
+  become: true
+  tasks:
+    - name: Detectar si es Debian/Ubuntu o RHEL/CentOS
+      ansible.builtin.shell: |
+        if command -v apache2 >/dev/null 2>&1; then
+          apache2 -v
+        elif command -v httpd >/dev/null 2>&1; then
+          httpd -v
+        else
+          echo "Apache no está instalado"
+        fi
+      register: apache_version
+      changed_when: false
+
+    - name: Mostrar versión de Apache
+      ansible.builtin.debug:
+        msg: "{{ inventory_hostname }} -> {{ apache_version.stdout }}"
