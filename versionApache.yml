@@ -1,6 +1,6 @@
 ---
 - name: Obtener versión de Apache
-  hosts: webservers   # <- aquí va tu grupo de hosts en el inventory
+  hosts: all   # <- aquí va tu grupo de hosts en el inventory
   become: true
   tasks:
     - name: Detectar si es Debian/Ubuntu o RHEL/CentOS
