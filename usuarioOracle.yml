@@ -1,6 +1,6 @@
 ---
 - name: Consultar usuarios del sistema sin escribir en remoto
-  hosts: oracle_servers
+  hosts: all
   gather_facts: no
   become: yes
 
