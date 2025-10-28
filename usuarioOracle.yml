@@ -1,6 +1,6 @@
 ---
 - name: Obtener usuarios del sistema operativo Oracle y guardar en XML
-  hosts: oracle_servers
+  hosts: all
   become: yes
   gather_facts: yes
 
