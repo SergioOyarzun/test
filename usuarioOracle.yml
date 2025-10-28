@@ -1,59 +1,51 @@
 ---
-- name: Obtener usuarios del sistema operativo Oracle y guardar en XML
+- name: Consultar usuarios del sistema (sin escribir en remoto)
   hosts: all
+  gather_facts: no
   become: yes
-  gather_facts: yes
-
-  vars:
-    salida_local: "/tmp/usuarios_sistema.xml"
 
   tasks:
-    - name: Obtener lista completa de usuarios del sistema
+    - name: Obtener lista de usuarios del sistema
       command: cat /etc/passwd
-      register: passwd_contenido
+      register: usuarios_sistema
 
-    - name: Obtener miembros del grupo sudo o wheel (administradores)
+    - name: Obtener grupo de administradores
       shell: getent group sudo || getent group wheel
       register: grupo_admin
+      failed_when: false
 
-    - name: Crear reporte temporal en el nodo remoto
-      copy:
-        dest: /tmp/usuarios_tmp.txt
-        content: |
-          ==== Usuarios del sistema ====
-          {{ passwd_contenido.stdout }}
+    - name: Guardar datos de cada host en variables locales
+      set_fact:
+        reporte_usuarios: "{{ (hostvars.localhost.reporte_usuarios | default({})) | combine({inventory_hostname: {'usuarios': usuarios_sistema.stdout, 'admin': grupo_admin.stdout}}) }}"
+      delegate_to: localhost
+      run_once: false
 
-          ==== Grupo de administradores ====
-          {{ grupo_admin.stdout }}
 
-    - name: Copiar archivo temporal desde el servidor remoto
-      fetch:
-        src: /tmp/usuarios_tmp.txt
-        dest: /tmp/usuarios_tmp_{{ inventory_hostname }}.txt
-        flat: yes
-
-- name: Consolidar resultados en el servidor de Ansible
+- name: Generar archivo XML consolidado en el servidor de Ansible
   hosts: localhost
   gather_facts: no
   vars:
     salida_local: "/tmp/usuarios_sistema.xml"
+
   tasks:
-    - name: Generar archivo XML consolidado
+    - name: Crear XML con los datos recolectados
       copy:
         dest: "{{ salida_local }}"
         content: |
           <?xml version="1.0" encoding="UTF-8"?>
           <servidores>
-          {% for host in hostvars %}
-            {% if 'usuarios_tmp_' ~ host in lookup('fileglob', '/tmp/usuarios_tmp_*') %}
+          {% for host, datos in reporte_usuarios.items() %}
             <servidor nombre="{{ host }}">
-              <usuarios>
-              {{ lookup('file', '/tmp/usuarios_tmp_' ~ host ~ '.txt') | indent(4) }}
-              </usuarios>
+              <usuarios><![CDATA[
+{{ datos.usuarios }}
+              ]]></usuarios>
+              <administradores><![CDATA[
+{{ datos.admin }}
+              ]]></administradores>
             </servidor>
-            {% endif %}
           {% endfor %}
           </servidores>
-    - name: Mostrar ubicación del XML generado
+
+    - name: Mostrar ruta del XML generado
       debug:
-        msg: "Archivo XML generado en {{ salida_local }}"
+        msg: "Archivo XML generado correctamente en {{ salida_local }}"
