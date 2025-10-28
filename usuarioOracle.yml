@@ -1,6 +1,6 @@
 ---
-- name: Consultar usuarios del sistema (sin escribir en remoto)
-  hosts: all
+- name: Consultar usuarios del sistema sin escribir en remoto
+  hosts: oracle_servers
   gather_facts: no
   become: yes
 
@@ -14,21 +14,20 @@
       register: grupo_admin
       failed_when: false
 
-    - name: Guardar datos de cada host en variables locales
-      set_fact:
-        reporte_usuarios: "{{ (hostvars.localhost.reporte_usuarios | default({})) | combine({inventory_hostname: {'usuarios': usuarios_sistema.stdout, 'admin': grupo_admin.stdout}}) }}"
+    - name: Enviar datos al controlador
       delegate_to: localhost
       run_once: false
+      set_fact:
+        reporte_usuarios: "{{ (reporte_usuarios | default({})) | combine({inventory_hostname: {'usuarios': usuarios_sistema.stdout, 'admin': grupo_admin.stdout}}) }}"
 
-
-- name: Generar archivo XML consolidado en el servidor de Ansible
+- name: Generar XML consolidado en el controlador
   hosts: localhost
   gather_facts: no
   vars:
     salida_local: "/tmp/usuarios_sistema.xml"
 
   tasks:
-    - name: Crear XML con los datos recolectados
+    - name: Crear XML usando plantilla segura
       copy:
         dest: "{{ salida_local }}"
         content: |
@@ -36,16 +35,7 @@
           <servidores>
           {% for host, datos in reporte_usuarios.items() %}
             <servidor nombre="{{ host }}">
-              <usuarios><![CDATA[
-{{ datos.usuarios }}
-              ]]></usuarios>
-              <administradores><![CDATA[
-{{ datos.admin }}
-              ]]></administradores>
+              <usuarios><![CDATA[{{ datos.usuarios | replace(']]>', ']]]]><![CDATA[>') }}]]></usuarios>
+              <administradores><![CDATA[{{ datos.admin | default('') | replace(']]>', ']]]]><![CDATA[>') }}]]></administradores>
             </servidor>
-          {% endfor %}
-          </servidores>
-
-    - name: Mostrar ruta del XML generado
-      debug:
-        msg: "Archivo XML generado correctamente en {{ salida_local }}"
+          {% endfor %
