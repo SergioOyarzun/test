@@ -14,28 +14,25 @@
       register: grupo_admin
       failed_when: false
 
-    - name: Enviar datos al controlador
+    - name: Acumular datos en el controlador
       delegate_to: localhost
       run_once: false
       set_fact:
         reporte_usuarios: "{{ (reporte_usuarios | default({})) | combine({inventory_hostname: {'usuarios': usuarios_sistema.stdout, 'admin': grupo_admin.stdout}}) }}"
 
-- name: Generar XML consolidado en el controlador
+
+- name: Generar archivo XML consolidado en el controlador
   hosts: localhost
   gather_facts: no
   vars:
     salida_local: "/tmp/usuarios_sistema.xml"
 
   tasks:
-    - name: Crear XML usando plantilla segura
-      copy:
+    - name: Crear XML desde plantilla Jinja2
+      template:
+        src: usuarios_sistema.xml.j2
         dest: "{{ salida_local }}"
-        content: |
-          <?xml version="1.0" encoding="UTF-8"?>
-          <servidores>
-          {% for host, datos in reporte_usuarios.items() %}
-            <servidor nombre="{{ host }}">
-              <usuarios><![CDATA[{{ datos.usuarios | replace(']]>', ']]]]><![CDATA[>') }}]]></usuarios>
-              <administradores><![CDATA[{{ datos.admin | default('') | replace(']]>', ']]]]><![CDATA[>') }}]]></administradores>
-            </servidor>
-          {% endfor %
+
+    - name: Mostrar ubicación del XML generado
+      debug:
+        msg: "Archivo XML generado correctamente en {{ salida_local }}"
