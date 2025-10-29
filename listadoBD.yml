@@ -1,0 +1,68 @@
+- name: Listar instalaciones de MySQL y PostgreSQL en servidores remotos
+  hosts: all
+  become: yes
+  gather_facts: yes
+
+  vars:
+    salida_remota: /tmp/listado_bases.txt
+    salida_local: /tmp/listado_bases_consolidado.txt
+
+  tasks:
+    - name: Detectar binarios MySQL/MariaDB
+      shell: |
+        which mysql || which mariadb || echo "No encontrado"
+      register: mysql_bin
+
+    - name: Detectar binarios PostgreSQL
+      shell: |
+        which psql || echo "No encontrado"
+      register: postgres_bin
+
+    - name: Verificar servicios MySQL/MariaDB
+      shell: |
+        systemctl list-units --type=service | grep -E "mysql|mariadb" || echo "No hay servicio MySQL/MariaDB"
+      register: mysql_servicios
+
+    - name: Verificar servicios PostgreSQL
+      shell: |
+        systemctl list-units --type=service | grep postgresql || echo "No hay servicio PostgreSQL"
+      register: postgres_servicios
+
+    - name: Crear archivo de reporte remoto
+      copy:
+        dest: "{{ salida_remota }}"
+        content: |
+          ==== Host: {{ inventory_hostname }} ====
+          Fecha: {{ ansible_date_time.date }} {{ ansible_date_time.time }}
+          Sistema: {{ ansible_distribution }} {{ ansible_distribution_version }}
+
+          --- MySQL/MariaDB ---
+          Binario: {{ mysql_bin.stdout }}
+          Servicios:
+          {{ mysql_servicios.stdout }}
+
+          --- PostgreSQL ---
+          Binario: {{ postgres_bin.stdout }}
+          Servicios:
+          {{ postgres_servicios.stdout }}
+
+          ---------------------------------------
+
+    - name: Traer reporte al servidor Ansible
+      fetch:
+        src: "{{ salida_remota }}"
+        dest: /tmp/listado_bases_{{ inventory_hostname }}.txt
+        flat: yes
+
+- name: Consolidar resultados en un solo archivo
+  hosts: localhost
+  gather_facts: no
+  tasks:
+    - name: Combinar todos los reportes remotos
+      shell: cat /tmp/listado_bases_*.txt > /tmp/listado_bases_consolidado.txt
+      args:
+        executable: /bin/bash
+
+    - name: Mostrar ubicación del archivo consolidado
+      debug:
+        msg: "El archivo consolidado se encuentra en /tmp/listado_bases_consolidado.txt"
