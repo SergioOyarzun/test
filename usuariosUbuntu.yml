@@ -1,0 +1,54 @@
+---
+- name: Consultar usuarios del sistema operativo Ubuntu y consolidar en XML
+  hosts: all
+  become: yes
+  gather_facts: no
+
+  vars:
+    salida_local: "/tmp/usuarios_sistema.xml"
+
+  tasks:
+    - name: Obtener lista de usuarios del sistema
+      command: cat /etc/passwd
+      register: usuarios_sistema
+
+    - name: Obtener grupo de administradores
+      shell: getent group sudo || getent group wheel
+      register: grupo_admin
+      failed_when: false
+
+    - name: Acumular datos en el controlador
+      delegate_to: localhost
+      run_once: false
+      set_fact:
+        reporte_usuarios: "{{ (reporte_usuarios | default({})) | combine({inventory_hostname: {'usuarios': usuarios_sistema.stdout, 'admin': grupo_admin.stdout}}) }}"
+
+
+- name: Generar archivo XML consolidado en el controlador
+  hosts: localhost
+  gather_facts: no
+  vars:
+    salida_local: "/tmp/usuarios_sistema.xml"
+
+  tasks:
+    - name: Crear archivo XML consolidado
+      copy:
+        dest: "{{ salida_local }}"
+        content: |
+          <?xml version="1.0" encoding="UTF-8"?>
+          <servidores>
+          {% for host, datos in reporte_usuarios.items() %}
+            <servidor nombre="{{ host }}">
+              <usuarios><![CDATA[
+{{ datos.usuarios }}
+              ]]></usuarios>
+              <administradores><![CDATA[
+{{ datos.admin }}
+              ]]></administradores>
+            </servidor>
+          {% endfor %}
+          </servidores>
+
+    - name: Mostrar ubicación del XML generado
+      debug:
+        msg: "Archivo XML generado correctamente en {{ salida_local }}"
