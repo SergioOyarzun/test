@@ -1,54 +1,69 @@
 ---
-- name: Consultar usuarios del sistema operativo Ubuntu y consolidar en XML
-  hosts: all
+- name: Obtener usuarios del sistema operativo Ubuntu y guardar en XML
+  hosts: ubuntu_servers
   become: yes
-  gather_facts: no
+  gather_facts: yes
 
   vars:
     salida_local: "/tmp/usuarios_sistema.xml"
 
   tasks:
-    - name: Obtener lista de usuarios del sistema
+    - name: Obtener lista completa de usuarios del sistema
       command: cat /etc/passwd
-      register: usuarios_sistema
+      register: passwd_contenido
 
-    - name: Obtener grupo de administradores
-      shell: getent group sudo || getent group wheel
+    - name: Obtener miembros del grupo sudo (administradores)
+      shell: getent group sudo || true
       register: grupo_admin
-      failed_when: false
 
-    - name: Acumular datos en el controlador
-      delegate_to: localhost
-      run_once: false
-      set_fact:
-        reporte_usuarios: "{{ (reporte_usuarios | default({})) | combine({inventory_hostname: {'usuarios': usuarios_sistema.stdout, 'admin': grupo_admin.stdout}}) }}"
+    - name: Verificar si existe el usuario root
+      shell: id root || true
+      register: root_usuario
 
+    - name: Crear reporte temporal en el nodo remoto
+      copy:
+        dest: /tmp/usuarios_tmp.txt
+        content: |
+          ==== Usuarios del sistema ====
+          {{ passwd_contenido.stdout }}
 
-- name: Generar archivo XML consolidado en el controlador
+          ==== Grupo de administradores (sudo) ====
+          {{ grupo_admin.stdout }}
+
+          ==== Usuario root ====
+          {{ root_usuario.stdout }}
+
+    - name: Copiar archivo temporal desde el servidor remoto
+      fetch:
+        src: /tmp/usuarios_tmp.txt
+        dest: /tmp/usuarios_tmp_{{ inventory_hostname }}.txt
+        flat: yes
+
+- name: Consolidar resultados en el servidor de Ansible
   hosts: localhost
   gather_facts: no
   vars:
     salida_local: "/tmp/usuarios_sistema.xml"
 
   tasks:
-    - name: Crear archivo XML consolidado
+    - name: Generar archivo XML consolidado
       copy:
         dest: "{{ salida_local }}"
         content: |
           <?xml version="1.0" encoding="UTF-8"?>
           <servidores>
-          {% for host, datos in reporte_usuarios.items() %}
+          {% for host in groups['ubuntu_servers'] %}
+            {% set archivo = '/tmp/usuarios_tmp_' ~ host ~ '.txt' %}
+            {% if lookup('fileglob', archivo) %}
             <servidor nombre="{{ host }}">
               <usuarios><![CDATA[
-{{ datos.usuarios }}
+              {{ lookup('file', archivo) }}
               ]]></usuarios>
-              <administradores><![CDATA[
-{{ datos.admin }}
-              ]]></administradores>
             </servidor>
+            {% endif %}
           {% endfor %}
           </servidores>
 
     - name: Mostrar ubicación del XML generado
       debug:
-        msg: "Archivo XML generado correctamente en {{ salida_local }}"
+        msg: "Archivo XML generado en {{ salida_local }}"
