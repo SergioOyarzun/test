@@ -1,6 +1,6 @@
 ---
 - name: Obtener usuarios del sistema operativo Ubuntu y guardar en XML
-  hosts: ubuntu_servers
+  hosts: all
   become: yes
   gather_facts: yes
 
@@ -39,6 +39,7 @@
         dest: /tmp/usuarios_tmp_{{ inventory_hostname }}.txt
         flat: yes
 
+
 - name: Consolidar resultados en el servidor de Ansible
   hosts: localhost
   gather_facts: no
@@ -52,7 +53,7 @@
         content: |
           <?xml version="1.0" encoding="UTF-8"?>
           <servidores>
-          {% for host in groups['ubuntu_servers'] %}
+          {% for host in play_hosts %}
             {% set archivo = '/tmp/usuarios_tmp_' ~ host ~ '.txt' %}
             {% if lookup('fileglob', archivo) %}
             <servidor nombre="{{ host }}">
