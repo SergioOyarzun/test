@@ -1,0 +1,117 @@
+---
+- name: IOC Detection for SOA / OSB / BPM / WebLogic
+  hosts: soa_servers
+  become: yes
+  vars:
+    iocs:
+      - "encr"
+      - "enasui"
+      - "mdowny"
+      - "198.49.23.145"
+      - "82.98.160.159"
+
+    domains:
+      - PROD_SOA_DOMAIN
+      - PROD_OSB_DOMAIN
+      - PROD_BPM_DOMAIN
+
+    base_path: "/u01/app/oracle/admin/domains"
+    log_path: "/u01/app/oracle/admin/logs"
+
+  tasks:
+
+    - name: Crear archivo de reporte
+      copy:
+        dest: "/tmp/ioc_report_{{ inventory_hostname }}.log"
+        content: "Reporte IoC WebLogic - {{ inventory_hostname }}\n\n"
+
+    - name: Buscar IoCs en logs de los dominios
+      shell: |
+        for ioc in {{ iocs | join(' ') }}; do
+          grep -Rin "$ioc" {{ log_path }}/* || true
+        done
+      register: log_scan
+
+    - name: Agregar resultados de logs al reporte
+      lineinfile:
+        path: "/tmp/ioc_report_{{ inventory_hostname }}.log"
+        line: |
+          =============================
+          [LOG SCAN] Resultados:
+          {{ log_scan.stdout }}
+          =============================
+        insertafter: EOF
+
+    - name: Escanear archivos de configuración (config.xml, datasources, OSB, BPM)
+      shell: |
+        for ioc in {{ iocs | join(' ') }}; do
+          grep -Rin "$ioc" {{ base_path }} || true
+        done
+      register: config_scan
+
+    - name: Agregar resultados de configs al reporte
+      lineinfile:
+        path: "/tmp/ioc_report_{{ inventory_hostname }}.log"
+        line: |
+          =============================
+          [CONFIG SCAN] Resultados:
+          {{ config_scan.stdout }}
+          =============================
+        insertafter: EOF
+
+    - name: Escanear composites SOA y servicios OSB
+      shell: |
+        for domain in {{ domains | join(' ') }}; do
+          if [ -d "{{ base_path }}/$domain/servers" ]; then
+            grep -Rin "http" {{ base_path }}/$domain/servers || true
+          fi
+        done
+      register: soa_osb_scan
+
+    - name: Registrar resultados de scans OSB/SOA/BPM
+      lineinfile:
+        path: "/tmp/ioc_report_{{ inventory_hostname }}.log"
+        line: |
+          =============================
+          [SOA/OSB/BPM ENDPOINTS] Resultados:
+          {{ soa_osb_scan.stdout }}
+          =============================
+        insertafter: EOF
+
+    - name: Detectar procesos Java WebLogic
+      shell: |
+        ps -ef | grep java
+      register: java_processes
+
+    - name: Agregar procesos Java al reporte
+      lineinfile:
+        path: "/tmp/ioc_report_{{ inventory_hostname }}.log"
+        line: |
+          =============================
+          [JAVA PROCESSES] Resultados:
+          {{ java_processes.stdout }}
+          =============================
+        insertafter: EOF
+
+    - name: Detectar consultas DNS activas (si tcpdump está instalado)
+      shell: |
+        if command -v tcpdump >/dev/null 2>&1; then
+          timeout 10 tcpdump -n -i any port 53 2>/dev/null | grep -Ei "{{ iocs | join('|') }}" || true
+        else
+          echo "tcpdump no instalado"
+        fi
+      register: dns_live
+
+    - name: Agregar análisis de DNS en vivo al reporte
+      lineinfile:
+        path: "/tmp/ioc_report_{{ inventory_hostname }}.log"
+        line: |
+          =============================
+          [DNS LIVE SCAN] Resultados:
+          {{ dns_live.stdout }}
+          =============================
+        insertafter: EOF
+
+    - name: Mostrar ubicación del reporte
+      debug:
+        msg: "Reporte generado: /tmp/ioc_report_{{ inventory_hostname }}.log"
