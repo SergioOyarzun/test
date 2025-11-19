@@ -1,24 +1,14 @@
 ---
-- name: IOC Deep Scan on Local Server (SOA/OSB/BPM/WebLogic)
+- name: IOC Detection for SOA / OSB / BPM / WebLogic
   hosts: all
-  connection: local
   become: yes
-
   vars:
-    # IoCs de dominio y rutas completas
     iocs:
-      - "encr.pw"
-      - "enasui.com"
-      - "mdowny11.cfd"
-
-    full_iocs:
-      - "encr.pw/eKn5j"
-      - "encr.pw/bancaFINDOMESTIC"
-      - "enasui.com/area_comedor_new/js/jspdf.jquery.js"
-      - "encr.pw/2022irstaxrefundclaim"
-      - "encr.pw/sella-hype-web"
-      - "encr.pw/32IYY"
-      - "encr.pw/hype-aggiorna-web"
+      - "encr"
+      - "enasui"
+      - "mdowny"
+      - "198.49.23.145"
+      - "82.98.160.159"
 
     domains:
       - PROD_SOA_DOMAIN
@@ -27,156 +17,101 @@
 
     base_path: "/u01/app/oracle/admin/domains"
     log_path: "/u01/app/oracle/admin/logs"
-    report_file: "/tmp/ioc_report_local_{{ ansible_hostname }}.log"
 
   tasks:
 
-    - name: Crear archivo vacío de reporte
+    - name: Crear archivo de reporte
       copy:
-        dest: "{{ report_file }}"
-        content: "Reporte IoC Deep Scan - {{ ansible_hostname }}\n\n"
+        dest: "/tmp/ioc_report_{{ inventory_hostname }}.log"
+        content: "Reporte IoC WebLogic - {{ inventory_hostname }}\n\n"
 
-    ###########################################################################
-    # 1. SCAN BÁSICO DE LOGS
-    ###########################################################################
-
-    - name: Buscar IoCs de dominios base en logs
+    - name: Buscar IoCs en logs de los dominios
       shell: |
-        grep -RinE "{{ iocs | join('|') }}" {{ log_path }}/* 2>/dev/null || true
-      register: log_basic
+        for ioc in {{ iocs | join(' ') }}; do
+          grep -Rin "$ioc" {{ log_path }}/* || true
+        done
+      register: log_scan
 
-    - name: Buscar IoCs de rutas completas en logs
-      shell: |
-        grep -RinE "{{ full_iocs | join('|') }}" {{ log_path }}/* 2>/dev/null || true
-      register: log_full
-
-    - name: Insertar resultados en reporte
+    - name: Agregar resultados de logs al reporte
       lineinfile:
-        path: "{{ report_file }}"
-        insertafter: EOF
+        path: "/tmp/ioc_report_{{ inventory_hostname }}.log"
         line: |
           =============================
-          [LOG SCAN - DOMINIOS]
-          {{ log_basic.stdout }}
-          -----------------------------
-          [LOG SCAN - RUTAS COMPLETAS]
-          {{ log_full.stdout }}
+          [LOG SCAN] Resultados:
+          {{ log_scan.stdout }}
           =============================
-
-    ###########################################################################
-    # 2. SCAN CONFIGURACIONES (config.xml, jdbc, osb, bpm, soa)
-    ###########################################################################
-
-    - name: Escanear configuraciones WebLogic (dominios base)
-      shell: |
-        grep -RinE "{{ iocs | join('|') }}" {{ base_path }} 2>/dev/null || true
-      register: config_basic
-
-    - name: Escanear rutas completas en configuración
-      shell: |
-        grep -RinE "{{ full_iocs | join('|') }}" {{ base_path }} 2>/dev/null || true
-      register: config_full
-
-    - name: Agregar resultados de configuración al reporte
-      lineinfile:
-        path: "{{ report_file }}"
         insertafter: EOF
+
+    - name: Escanear archivos de configuración (config.xml, datasources, OSB, BPM)
+      shell: |
+        for ioc in {{ iocs | join(' ') }}; do
+          grep -Rin "$ioc" {{ base_path }} || true
+        done
+      register: config_scan
+
+    - name: Agregar resultados de configs al reporte
+      lineinfile:
+        path: "/tmp/ioc_report_{{ inventory_hostname }}.log"
         line: |
           =============================
-          [CONFIG SCAN - DOMINIOS]
-          {{ config_basic.stdout }}
-          -----------------------------
-          [CONFIG SCAN - RUTAS COMPLETAS]
-          {{ config_full.stdout }}
+          [CONFIG SCAN] Resultados:
+          {{ config_scan.stdout }}
           =============================
+        insertafter: EOF
 
-    ###########################################################################
-    # 3. SCAN DE DEPLOYMENTS (EAR, WAR, JAR, composites, OSB)
-    ###########################################################################
-
-    - name: Escanear artefactos (EAR/WAR/JAR) dentro del dominio
+    - name: Escanear composites SOA y servicios OSB
       shell: |
         for domain in {{ domains | join(' ') }}; do
-          find {{ base_path }}/$domain -name "*.jar" -o -name "*.war" -o -name "*.ear" 2>/dev/null | while read file; do
-            unzip -p "$file" | grep -Ei "{{ iocs | join('|') }}" && echo "IOC en $file"
-          done
+          if [ -d "{{ base_path }}/$domain/servers" ]; then
+            grep -Rin "http" {{ base_path }}/$domain/servers || true
+          fi
         done
-      register: artifact_scan
+      register: soa_osb_scan
 
-    - name: Agregar artefactos al reporte
+    - name: Registrar resultados de scans OSB/SOA/BPM
       lineinfile:
-        path: "{{ report_file }}"
-        insertafter: EOF
+        path: "/tmp/ioc_report_{{ inventory_hostname }}.log"
         line: |
           =============================
-          [DEPLOYMENT SCAN - EAR/WAR/JAR]
-          {{ artifact_scan.stdout }}
+          [SOA/OSB/BPM ENDPOINTS] Resultados:
+          {{ soa_osb_scan.stdout }}
           =============================
+        insertafter: EOF
 
-    ###########################################################################
-    # 4. TMP RUNTIME DE WEBLOGIC (MUY IMPORTANTE)
-    ###########################################################################
-
-    - name: Escanear tmp/_WL_user (runtime real de servicios)
+    - name: Detectar procesos Java WebLogic
       shell: |
-        grep -RinE "{{ iocs | join('|') }}" {{ base_path }}/*/servers/*/tmp/_WL_user 2>/dev/null || true
-      register: tmp_scan
-
-    - name: Agregar tmp runtime al reporte
-      lineinfile:
-        path: "{{ report_file }}"
-        insertafter: EOF
-        line: |
-          =============================
-          [RUNTIME /tmp/_WL_user]
-          {{ tmp_scan.stdout }}
-          =============================
-
-    ###########################################################################
-    # 5. PROCESOS JAVA (SOA/OSB/BPM)
-    ###########################################################################
-
-    - name: Detectar procesos Java activos WebLogic
-      shell: ps -ef | grep java | grep -v grep
-      register: java_proc
+        ps -ef | grep java
+      register: java_processes
 
     - name: Agregar procesos Java al reporte
       lineinfile:
-        path: "{{ report_file }}"
-        insertafter: EOF
+        path: "/tmp/ioc_report_{{ inventory_hostname }}.log"
         line: |
           =============================
-          [JAVA PROCESSES]
-          {{ java_proc.stdout }}
+          [JAVA PROCESSES] Resultados:
+          {{ java_processes.stdout }}
           =============================
+        insertafter: EOF
 
-    ###########################################################################
-    # 6. DNS LIVE SCAN (QUÉ PID MANDA LAS CONSULTAS)
-    ###########################################################################
-
-    - name: Captura en vivo DNS (si existe tcpdump)
+    - name: Detectar consultas DNS activas (si tcpdump está instalado)
       shell: |
-        if command -v tcpdump >/dev/null; then
-          timeout 6 tcpdump -n -i any port 53 2>/dev/null | grep -Ei "{{ iocs | join('|') }}"
+        if command -v tcpdump >/dev/null 2>&1; then
+          timeout 10 tcpdump -n -i any port 53 2>/dev/null | grep -Ei "{{ iocs | join('|') }}" || true
         else
           echo "tcpdump no instalado"
         fi
-      register: dns_scan
+      register: dns_live
 
-    - name: Agregar DNS al reporte
+    - name: Agregar análisis de DNS en vivo al reporte
       lineinfile:
-        path: "{{ report_file }}"
-        insertafter: EOF
+        path: "/tmp/ioc_report_{{ inventory_hostname }}.log"
         line: |
           =============================
-          [DNS LIVE SCAN]
-          {{ dns_scan.stdout }}
+          [DNS LIVE SCAN] Resultados:
+          {{ dns_live.stdout }}
           =============================
+        insertafter: EOF
 
-    ###########################################################################
-    # FIN
-    ###########################################################################
-
-    - name: Mostrar ubicación del reporte final
+    - name: Mostrar ubicación del reporte
       debug:
-        msg: "Reporte generado en: {{ report_file }}"
+        msg: "Reporte generado: /tmp/ioc_report_{{ inventory_hostname }}.log"
