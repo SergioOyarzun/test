@@ -1,6 +1,6 @@
 ---
 - name: IOC Detection for SOA / OSB / BPM / WebLogic
-  hosts: soa_servers
+  hosts: all
   become: yes
   vars:
     iocs:
